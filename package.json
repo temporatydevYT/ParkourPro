@@ -1,0 +1,16 @@
+{
+  "name": "parkour-game",
+  "version": "1.0.0",
+  "description": "A Three.js parkour game with physics and collisions",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["threejs", "game", "parkour"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

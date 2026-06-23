@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Three.js Parkour Game</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <link type="text/css" rel="stylesheet" href="main.css">
+  <style>
+    #jump-button { position: fixed; right: 44px; bottom: 66px; font-size: 28px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background:#1118; color:#fff; user-select:none; touch-action: none; }
+    #joystick-zone { position: fixed; left: 48px; bottom: 45px; width: 120px; height: 120px; border-radius: 50%; touch-action: none; }
+    #joystick-base { position:absolute; left:0; top:0; width:120px; height:120px; border-radius:50%; outline:2px solid #fff8; }
+    #joystick-stick{ position:absolute; width:50px; height:50px; left:35px; top:35px; border-radius:50%; background:#fff8; transition: left 0.1s ease-out, top 0.1s ease-out; }
+    canvas { touch-action: none; }
+    #throw-button { position: fixed; right: 130px; bottom: 66px; font-size: 28px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #1118; color: #fff; user-select: none; touch-action: none; }
+    #throw-cooldown-container { position: fixed; top: 60px; right: 10px; }
+    #throw-hud { display: flex; align-items: center; gap: 8px; padding: 5px 9px 5px 6px; background: rgba(0,0,0,0.38); border-radius: 20px; }
+    #throw-hud-icon { width: 26px; height: 26px; object-fit: contain; display: block; flex-shrink: 0; border-radius: 50%; }
+    #throw-bar-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 90px; }
+    #throw-bar-track { position: relative; width: 100%; height: 4px; background: rgba(255,255,255,0.12); border-radius: 99px; overflow: hidden; }
+    #throw-cooldown-fill { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); border-radius: 99px; transform-origin: left; transform: scaleX(1); transition: transform 0.04s linear; box-shadow: 0 0 6px rgba(79,172,254,0.8); }
+    #throw-bar-meta { display: flex; justify-content: space-between; align-items: center; }
+    #throw-count { font-family: 'Courier New', monospace; font-size: 10px; font-weight: 900; color: rgba(255,255,255,0.85); }
+    #throw-cooldown-label { font-family: 'Courier New', monospace; font-size: 9px; letter-spacing: 1px; color: rgba(79,172,254,0.85); font-weight: 700; text-transform: uppercase; }
+    #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 30px; overflow: hidden; }
+    #loading-screen.hidden { display: none; }
+    #loading-screen::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,0.03) 2px, rgba(0,255,136,0.03) 4px);
+      background-size: 100% 4px;
+      animation: scanlines 0.6s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes scanlines {
+      0%   { background-position: 0 0; }
+      100% { background-position: 0 4px; }
+    }
+    #loading-screen::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, transparent 0%, rgba(10,10,10,0.8) 100%);
+      pointer-events: none;
+    }
+    #loading-percentage { 
+      position: relative;
+      color: #fff; 
+      font-family: 'Courier New', monospace; 
+      font-size: clamp(1em, 2.5vw, 1.4em); 
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-shadow: 
+        0 0 10px rgba(0,255,136,0.8),
+        0 0 20px rgba(0,255,136,0.6),
+        0 0 30px rgba(0,255,136,0.4),
+        0 4px 10px rgba(0,0,0,0.5);
+      z-index: 1;
+      margin-bottom: 50px;
+      animation: percentageFloat 3s ease-in-out infinite;
+    }
+    @keyframes percentageFloat {
+      0%, 100% { 
+        transform: translateY(0px);
+        text-shadow: 
+          0 0 10px rgba(0,255,136,0.8),
+          0 0 20px rgba(0,255,136,0.6),
+          0 0 30px rgba(0,255,136,0.4),
+          0 4px 10px rgba(0,0,0,0.5);
+      }
+      50% { 
+        transform: translateY(-10px);
+        text-shadow: 
+          0 0 15px rgba(0,255,136,1),
+          0 0 30px rgba(0,255,136,0.8),
+          0 0 45px rgba(0,255,136,0.6),
+          0 8px 15px rgba(0,0,0,0.6);
+      }
+    }
+    #loading-bar-container { 
+      width: 70%; 
+      max-width: 500px; 
+      height: 8px; 
+      background: rgba(0,0,0,0.5); 
+      border-radius: 20px; 
+      overflow: visible;
+      position: relative;
+      z-index: 1;
+      box-shadow: 
+        inset 0 2px 8px rgba(0,0,0,0.6),
+        0 0 20px rgba(0,255,136,0.2);
+    }
+    #loading-bar { 
+      height: 100%; 
+      background: linear-gradient(90deg, 
+        #00ff88 0%, 
+        #00ddff 25%,
+        #00ff88 50%, 
+        #00ddff 75%,
+        #00ff88 100%); 
+      background-size: 200% 100%;
+      width: 0%; 
+      transition: width 0.4s cubic-bezier(0.4, 0.0, 0.2, 1); 
+      border-radius: 20px;
+      box-shadow: 
+        0 0 20px rgba(0,255,136,0.8),
+        0 0 40px rgba(0,255,136,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.5);
+      animation: slideGradient 2s ease-in-out infinite;
+      position: relative;
+    }
+    #loading-bar-glow {
+      position: absolute;
+      top: -4px;
+      left: 0;
+      right: 0;
+      height: 16px;
+      background: radial-gradient(ellipse at center, rgba(0,255,136,0.4) 0%, transparent 70%);
+      filter: blur(8px);
+      opacity: 0;
+      border-radius: 20px;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    #loading-bar-container:has(#loading-bar[style*="width"]) #loading-bar-glow {
+      opacity: 1;
+    }
+    @keyframes slideGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    #pause-button { position: fixed; top: 10px; right: 10px; width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.4); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; user-select: none; z-index: 100; transition: all 0.2s ease; }
+    #pause-button:hover { background: rgba(0,0,0,0.7); border-color: rgba(255,255,255,0.6); transform: scale(1.05); }
+    #pause-button:active { transform: scale(0.95); }
+    #game-timer { position: fixed; top: 58px; left: 10px; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 8px 12px; font-family: 'Courier New', monospace; font-size: 16px; font-weight: bold; color: #00ff88; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 100; min-width: 70px; display: flex; align-items: center; gap: 6px; }
+    #timer-icon { width: 18px; height: 18px; object-fit: contain; display: block; flex-shrink: 0; }
+    #pause-menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); backdrop-filter: blur(10px); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    #pause-menu.active { display: flex; }
+    #pause-menu-content { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 3px solid rgba(255,255,255,0.2); border-radius: 16px; padding: clamp(20px, 5vw, 40px); box-shadow: 0 20px 60px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: clamp(10px, 2vw, 14px); min-width: clamp(220px, 60vw, 280px); max-width: 90vw; }
+    #pause-title { color: #fff; font-size: clamp(24px, 6vw, 32px); font-weight: bold; text-align: center; margin-bottom: clamp(5px, 2vw, 10px); font-family: 'Courier New', monospace; letter-spacing: clamp(2px, 0.5vw, 3px); text-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+    .pause-btn { padding: clamp(12px, 3vw, 14px) clamp(20px, 5vw, 32px); font-size: clamp(14px, 3.5vw, 16px); font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid rgba(255,255,255,0.3); border-radius: 10px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: clamp(1px, 0.3vw, 2px); color: #fff; background: rgba(255,255,255,0.1); }
+    .pause-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.2); }
+    .pause-btn:active { transform: translateY(1px) scale(0.98); transition: all 0.1s ease; }
+    .pause-btn.clicking { animation: pauseBtnPress 0.3s ease; }
+    @keyframes pauseBtnPress {
+      0% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(2px) scale(0.97); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .pause-btn.resume { background: linear-gradient(135deg, #00c853 0%, #00e676 100%); border-color: #69f0ae; color: #fff; }
+    .pause-btn.resume:hover { background: linear-gradient(135deg, #00e676 0%, #00c853 100%); box-shadow: 0 8px 20px rgba(0,200,83,0.45); }
+    .pause-btn.retry { background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%); border-color: #ffa726; color: #fff; }
+    .pause-btn.retry:hover { background: linear-gradient(135deg, #ffa726 0%, #ff9800 100%); box-shadow: 0 8px 20px rgba(255,152,0,0.4); }
+    .pause-btn.settings { background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); border-color: #ba68c8; }
+    .pause-btn.settings:hover { background: linear-gradient(135deg, #ba68c8 0%, #9c27b0 100%); box-shadow: 0 8px 20px rgba(156,39,176,0.4); }
+    .pause-btn.leave { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); border-color: #e57373; }
+    .pause-btn.leave:hover { background: linear-gradient(135deg, #e57373 0%, #f44336 100%); box-shadow: 0 8px 20px rgba(244,67,54,0.4); }
+    #settings-menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); backdrop-filter: blur(10px); display: none; align-items: center; justify-content: center; z-index: 1500; }
+    #settings-menu.active { display: flex; }
+    #settings-menu-content { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 3px solid rgba(255,255,255,0.2); border-radius: 16px; padding: clamp(20px, 5vw, 40px); box-shadow: 0 20px 60px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: clamp(15px, 3vw, 20px); min-width: clamp(250px, 70vw, 320px); max-width: 90vw; }
+    #settings-title { color: #fff; font-size: clamp(24px, 6vw, 32px); font-weight: bold; text-align: center; margin-bottom: clamp(5px, 2vw, 10px); font-family: 'Courier New', monospace; letter-spacing: clamp(2px, 0.5vw, 3px); text-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+    .settings-option { display: flex; flex-direction: column; gap: 8px; }
+    .settings-label { color: #aaa; font-size: clamp(12px, 3vw, 14px); font-family: 'Courier New', monospace; letter-spacing: 1px; text-transform: uppercase; }
+    .settings-control { display: flex; align-items: center; gap: 12px; }
+    .settings-slider { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); outline: none; appearance: none; }
+    .settings-slider::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); cursor: pointer; box-shadow: 0 2px 8px rgba(156,39,176,0.5); }
+    .settings-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg, #9c27b0 0%, #7b1fa2 100%); cursor: pointer; border: none; box-shadow: 0 2px 8px rgba(156,39,176,0.5); }
+    .settings-value { color: #fff; font-family: 'Courier New', monospace; font-size: clamp(14px, 3.5vw, 16px); font-weight: bold; min-width: 40px; text-align: right; }
+    .settings-btn { padding: clamp(12px, 3vw, 14px) clamp(20px, 5vw, 32px); font-size: clamp(14px, 3.5vw, 16px); font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid rgba(255,255,255,0.3); border-radius: 10px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: clamp(1px, 0.3vw, 2px); color: #fff; background: rgba(255,255,255,0.1); text-align: center; }
+    .settings-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.2); }
+    .settings-btn:active { transform: translateY(1px) scale(0.98); transition: all 0.1s ease; }
+    .settings-btn.back { background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); border-color: #64b5f6; }
+    .settings-btn.back:hover { background: linear-gradient(135deg, #64b5f6 0%, #2196f3 100%); box-shadow: 0 8px 20px rgba(33,150,243,0.4); }
+
+    /* Graphics quality toggle buttons */
+    .gfx-btn-group { display: flex; gap: 8px; }
+    .gfx-btn { flex: 1; padding: 10px 6px; font-size: clamp(12px,3vw,14px); font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid rgba(255,255,255,0.25); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; text-transform: uppercase; letter-spacing: 1px; color: #aaa; background: rgba(255,255,255,0.07); }
+    .gfx-btn:hover { border-color: rgba(255,255,255,0.5); color: #fff; background: rgba(255,255,255,0.15); }
+    .gfx-btn.active { background: linear-gradient(135deg, #00c853 0%, #00897b 100%); border-color: #69f0ae; color: #fff; box-shadow: 0 4px 14px rgba(0,200,83,0.4); }
+
+    /* ── CSS-only menu background for Low graphics ── */
+    @keyframes bgGridScroll { from { background-position: 0 0; } to { background-position: 0 60px; } }
+    @keyframes bgPulse { 0%,100%{opacity:.18} 50%{opacity:.35} }
+    @keyframes bgFloat1 { 0%,100%{transform:translateY(0) translateX(0);opacity:.7} 50%{transform:translateY(-30px) translateX(12px);opacity:.3} }
+    @keyframes bgFloat2 { 0%,100%{transform:translateY(0) translateX(0);opacity:.5} 50%{transform:translateY(20px) translateX(-18px);opacity:.2} }
+    @keyframes bgFloat3 { 0%,100%{transform:translateY(0) translateX(0);opacity:.6} 60%{transform:translateY(-18px) translateX(8px);opacity:.15} }
+    .menu-bg-low {
+      background: #050a0a;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 29px, rgba(0,255,136,.13) 29px, rgba(0,255,136,.13) 30px),
+        repeating-linear-gradient(90deg, transparent, transparent 59px, rgba(0,221,255,.09) 59px, rgba(0,221,255,.09) 60px);
+      animation: bgGridScroll 2s linear infinite;
+    }
+    .menu-bg-low::before {
+      content:''; position:absolute; inset:0; pointer-events:none;
+      background: radial-gradient(ellipse 60% 50% at 30% 60%, rgba(0,255,136,.12) 0%, transparent 70%),
+                  radial-gradient(ellipse 50% 40% at 75% 35%, rgba(0,221,255,.10) 0%, transparent 70%);
+      animation: bgPulse 4s ease-in-out infinite;
+    }
+    .menu-bg-low .bg-dot { position:absolute; border-radius:50%; }
+    .menu-bg-low .bg-dot:nth-child(1){width:6px;height:6px;background:#00ff88;top:15%;left:20%;filter:blur(1px);animation:bgFloat1 7s ease-in-out infinite;}
+    .menu-bg-low .bg-dot:nth-child(2){width:4px;height:4px;background:#00ddff;top:70%;left:55%;filter:blur(1px);animation:bgFloat2 9s ease-in-out infinite;}
+    .menu-bg-low .bg-dot:nth-child(3){width:5px;height:5px;background:#00ff88;top:40%;left:80%;filter:blur(1px);animation:bgFloat3 6s ease-in-out infinite;}
+    .menu-bg-low .bg-dot:nth-child(4){width:3px;height:3px;background:#00ddff;top:80%;left:10%;filter:blur(1px);animation:bgFloat1 11s ease-in-out infinite 2s;}
+    .menu-bg-low .bg-dot:nth-child(5){width:7px;height:7px;background:#00ff88;top:25%;left:65%;filter:blur(2px);animation:bgFloat2 8s ease-in-out infinite 1s;}
+    .menu-bg-low .bg-dot:nth-child(6){width:4px;height:4px;background:#00ddff;top:60%;left:35%;filter:blur(1px);animation:bgFloat3 10s ease-in-out infinite 3s;}
+    #completion-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,4,0,0.5); backdrop-filter: blur(12px); display: none; align-items: center; justify-content: center; z-index: 2000; }
+    #completion-screen.active { display: flex; }
+    #completion-content { background: linear-gradient(135deg, #030d03 0%, #060f06 100%); border: 3px solid rgba(0,255,136,0.55); border-radius: 12px; padding: 20px 28px; box-shadow: 0 0 80px rgba(0,255,136,0.2), 0 25px 80px rgba(0,0,0,0.9); display: flex; flex-direction: column; gap: 8px; min-width: 240px; max-width: 320px; text-align: center; }
+    #completion-title { color: #00ff88; font-size: clamp(20px, 4.5vw, 26px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 2.5px; text-shadow: 0 4px 12px rgba(0,255,136,0.6); margin-bottom: 3px; }
+    #completion-level-text { color: #fff; font-size: clamp(12px, 2.5vw, 14px); font-family: 'Courier New', monospace; letter-spacing: 1.2px; }
+    #completion-level-number { color: #ffd700; font-weight: bold; }
+    #completion-stars-container { display: flex; gap: 12px; justify-content: center; padding: 10px 0; }
+    .completion-star { width: 45px; height: 45px; background-image: url('/cardImg/greyStar.png'); background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0; transform: scale(0); transition: all 0.5s ease; }
+    .completion-star.earned { opacity: 1; transform: scale(1); background-image: url('/cardImg/goldenStar.png'); filter: drop-shadow(0 0 12px rgba(255,215,0,1)) drop-shadow(0 0 20px rgba(255,215,0,0.9)) drop-shadow(0 0 28px rgba(255,215,0,0.7)); }
+    .completion-star.grey { opacity: 1; transform: scale(1); }
+    #completion-time-label { color: #aaa; font-size: clamp(10px, 2vw, 11px); font-family: 'Courier New', monospace; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 4px; }
+    #completion-time { color: #fff; font-size: clamp(20px, 4.5vw, 24px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 1.2px; text-shadow: 0 2px 8px rgba(255,255,255,0.3); margin-bottom: 6px; }
+    .completion-btn { padding: 9px 18px; font-size: clamp(11px, 2.5vw, 13px); font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid rgba(255,255,255,0.3); border-radius: 8px; cursor: pointer; transition: all 0.15s ease; text-transform: uppercase; letter-spacing: 1.2px; color: #fff; background: rgba(255,255,255,0.1); }
+    .completion-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.2); }
+    .completion-btn:active { transform: translateY(1px) scale(0.98); transition: all 0.1s ease; }
+    .completion-btn.clicking { animation: completionBtnPress 0.3s ease; }
+    @keyframes completionBtnPress {
+      0% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(2px) scale(0.97); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    .completion-btn.retry { background: linear-gradient(135deg, #ff9800 0%, #fb8c00 100%); border-color: #ffa726; }
+    .completion-btn.retry:hover { background: linear-gradient(135deg, #ffa726 0%, #ff9800 100%); box-shadow: 0 6px 16px rgba(255,152,0,0.4); }
+    .completion-btn.leave { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); border-color: #e57373; }
+    .completion-btn.leave:hover { background: linear-gradient(135deg, #e57373 0%, #f44336 100%); box-shadow: 0 6px 16px rgba(244,67,54,0.4); }
+    .completion-btn.next { background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%); border-color: #64b5f6; }
+    .completion-btn.next:hover { background: linear-gradient(135deg, #64b5f6 0%, #2196f3 100%); box-shadow: 0 6px 16px rgba(33,150,243,0.4); }
+    .completion-buttons { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+    #level-details-card { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,4,0,0.92); display: none; align-items: center; justify-content: center; z-index: 1500; padding: 2vh 2vw; box-sizing: border-box; backdrop-filter: blur(6px); }
+    #level-details-card.active { display: flex; }
+    #level-card-content { background: linear-gradient(135deg, #030d03 0%, #050e05 100%); border: 3px solid rgba(0,255,136,0.45); border-radius: 12px; padding: clamp(12px, 1.5vw, 18px); box-shadow: 0 0 60px rgba(0,255,136,0.12), 0 15px 50px rgba(0,0,0,0.8); display: grid; grid-template-columns: 1fr 1fr; gap: clamp(15px, 2vw, 25px); width: 90%; max-width: 650px; max-height: 85%; position: relative; overflow: hidden; }
+    #level-card-close { position: absolute; top: 8px; right: 12px; font-size: 24px; color: rgba(255,255,255,0.6); cursor: pointer; line-height: 1; transition: color 0.2s ease; z-index: 10; }
+    #level-card-close:hover { color: #fff; }
+    #level-card-image-container { width: 100%; aspect-ratio: 2/1; border-radius: 6px; overflow: hidden; border: 2px solid rgba(255,255,255,0.2); max-height: 200px; }
+    #level-card-image { width: 100%; height: 100%; object-fit: cover; }
+    #level-card-info { display: flex; flex-direction: column; gap: 4px; padding: 3px 0; }
+    #level-card-number { color: #00ff88; font-size: clamp(10px, 2vw, 12px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 1.2px; }
+    #level-card-name { color: #fff; font-size: clamp(14px, 3vw, 16px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0,0,0,0.5); }
+    #level-card-status-container { display: flex; gap: 6px; align-items: center; }
+    #level-card-status-label { color: #aaa; font-size: clamp(9px, 2vw, 11px); font-family: 'Courier New', monospace; letter-spacing: 0.8px; }
+    #level-card-status { font-size: clamp(10px, 2.2vw, 12px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 5px; }
+    #level-card-status.incomplete { background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #ff6b6b; }
+    #level-card-status.completed { background: rgba(0,255,136,0.2); border: 1px solid #00ff88; color: #00ff88; }
+    #level-card-left { display: flex; flex-direction: column; gap: clamp(8px, 1.2vw, 12px); justify-content: center; }
+    #level-card-right { display: flex; flex-direction: column; gap: clamp(6px, 1.2vw, 10px); justify-content: flex-start; overflow-y: auto; max-height: 100%; padding-right: 4px; }
+    #level-card-stats-title { color: #00ff88; font-size: clamp(14px, 2.5vw, 16px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 1.2px; text-shadow: 0 2px 8px rgba(0,255,136,0.4); border-bottom: 2px solid rgba(0,255,136,0.3); padding-bottom: 6px; }
+    #level-card-stars-container { display: flex; gap: 15px; justify-content: center; padding: 8px 0; }
+    .star-icon { width: 50px; height: 50px; position: relative; background-image: url('/cardImg/greyStar.png'); background-size: contain; background-repeat: no-repeat; background-position: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); transition: all 0.4s ease; }
+    .star-icon.lit { background-image: url('/cardImg/goldenStar.png'); filter: drop-shadow(0 0 8px rgba(255,215,0,0.8)) drop-shadow(0 0 12px rgba(255,215,0,0.6)) drop-shadow(0 0 16px rgba(255,215,0,0.4)) drop-shadow(0 2px 4px rgba(0,0,0,0.3)); animation: starGlow 2s ease-in-out infinite alternate; }
+    @keyframes starGlow {
+      0% { filter: drop-shadow(0 0 8px rgba(255,215,0,0.8)) drop-shadow(0 0 12px rgba(255,215,0,0.6)) drop-shadow(0 0 16px rgba(255,215,0,0.4)); transform: scale(1); }
+      100% { filter: drop-shadow(0 0 10px rgba(255,215,0,0.9)) drop-shadow(0 0 15px rgba(255,215,0,0.7)) drop-shadow(0 0 20px rgba(255,215,0,0.5)); transform: scale(1.02); }
+    }
+    #level-card-missions { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+    .mission-item { display: flex; align-items: center; gap: 6px; font-family: 'Courier New', monospace; font-size: clamp(9px, 1.8vw, 10px); color: #fff; padding: 4px 8px; background: rgba(255,255,255,0.05); border-radius: 5px; border: 1px solid rgba(255,255,255,0.1); }
+    .mission-status { font-size: clamp(10px, 2vw, 12px); }
+    .mission-text { flex: 1; letter-spacing: 0.4px; }
+    #level-card-best-time-container { padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.2); margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+    #level-card-best-time-label { color: #aaa; font-size: clamp(9px, 1.8vw, 10px); font-family: 'Courier New', monospace; letter-spacing: 0.6px; text-transform: uppercase; }
+    #level-card-best-time { color: #ffd700; font-size: clamp(12px, 2.5vw, 14px); font-weight: bold; font-family: 'Courier New', monospace; letter-spacing: 0.6px; text-shadow: 0 2px 6px rgba(255,215,0,0.3); }
+    #level-card-play-btn { padding: 8px 20px; font-size: clamp(12px, 2.5vw, 13px); font-weight: bold; font-family: 'Courier New', monospace; border: 2px solid #00ff88; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 1.2px; color: #000; background: linear-gradient(135deg, #00ff88 0%, #00cc88 100%); box-shadow: 0 4px 12px rgba(0,255,136,0.3); }
+    #level-card-play-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,255,136,0.5); background: linear-gradient(135deg, #00cc88 0%, #00ff88 100%); }
+    #level-card-play-btn:active { transform: translateY(1px) scale(0.98); transition: all 0.1s ease; }
+    #level-card-play-btn.clicking { animation: cardPlayBtnPress 0.25s ease; }
+    @keyframes cardPlayBtnPress {
+      0% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(2px) scale(0.97); }
+      100% { transform: translateY(0) scale(1); }
+    }
+    /* ── Button icon helper ─────────────────────────────────────────────── */
+    .btn-icon { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }
+    #level-card-play-btn .btn-icon { width: 14px; height: 14px; }
+    .menu-btn, .pause-btn, .completion-btn, #level-card-play-btn, .settings-btn, .back-button {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    #pause-button img { width: 100%; height: 100%; object-fit: contain; }
+    #jump-button img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+    #throw-button img { width: 78%; height: 78%; object-fit: contain; display: block; margin: auto; }
+    #jump-button, #throw-button { padding: 0; overflow: hidden; }
+    @media (max-width: 768px) {
+      #level-card-content { 
+        grid-template-columns: 1fr; 
+        gap: clamp(12px, 2vw, 18px); 
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      #level-card-image-container { 
+        aspect-ratio: 3/2; 
+        max-height: 150px;
+      }
+      .star-icon { width: 45px; height: 45px; }
+      #level-card-left { gap: clamp(6px, 1vw, 10px); }
+      #level-card-right { gap: clamp(4px, 1vw, 8px); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Animated Background Slideshow -->
+  <div class="menu-background"></div>
+
+  <!-- Start Screen -->
+  <div id="start-screen" class="active">
+    <div class="click-to-continue">click to continue</div>
+  </div>
+
+  <!-- Main Menu -->
+  <div id="main-menu" class="hidden">
+    <div class="menu-container">
+      <div id="game-title">PARKOUR PRO</div>
+      <div class="menu-buttons">
+        <button class="menu-btn" id="levels-btn"><img class="btn-icon" src="icons/levels.png" alt="">LEVELS</button>
+        <button class="menu-btn" id="main-menu-settings-btn"><img class="btn-icon" src="icons/settingsB.png" alt="">SETTINGS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level Selection Screen -->
+  <div id="level-selection" class="hidden">
+    <button id="back-btn" class="back-button"><img class="btn-icon" src="icons/back.png" alt="">BACK</button>
+    <div class="level-grid">
+      <div class="level-wrapper">
+        <div class="level-box" id="level-1">
+          <div class="level-number">1</div>
+        </div>
+        <div class="level-stars" data-level="1">
+          <div class="level-star"></div>
+          <div class="level-star"></div>
+          <div class="level-star"></div>
+        </div>
+      </div>
+      <div class="level-wrapper">
+        <div class="level-box locked" id="level-2">
+          <div class="level-number">2</div>
+          <svg class="lock-icon" viewBox="0 0 24 24" fill="#888">
+            <path d="M12 2C9.243 2 7 4.243 7 7v2H6c-1.103 0-2 .897-2 2v9c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2v-9c0-1.103-.897-2-2-2h-1V7c0-2.757-2.243-5-5-5zm6 9v9H6v-9h12zM9 9V7c0-1.654 1.346-3 3-3s3 1.346 3 3v2H9z"/>
+          </svg>
+        </div>
+        <div class="level-stars" data-level="2">
+          <div class="level-star"></div>
+          <div class="level-star"></div>
+          <div class="level-star"></div>
+        </div>
+      </div>
+      <div class="level-box locked disabled coming-soon-box">
+        <div class="level-number" style="font-size:0.85em; color:#aaa;">3</div>
+        <div class="coming-soon-label">COMING<br>SOON</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="hidden">
+    <div id="loading-percentage">0%</div>
+    <div id="loading-bar-container">
+      <div id="loading-bar"></div>
+      <div id="loading-bar-glow"></div>
+    </div>
+  </div>
+
+  <!-- Game Container -->
+  <div id="container" class="hidden"></div>
+  <div id="jump-button" class="game-ui hidden"><img src="icons/jump.png" alt="jump"></div>
+  <div id="throw-button" class="game-ui hidden"><img src="icons/throw.png" alt="throw"></div>
+  <div id="throw-cooldown-container" class="game-ui hidden">
+    <div id="throw-hud">
+      <img id="throw-hud-icon" src="icons/throw.png" alt="">
+      <div id="throw-bar-wrap">
+        <div id="throw-bar-track">
+          <div id="throw-cooldown-fill"></div>
+        </div>
+        <div id="throw-bar-meta">
+          <span id="throw-count">20</span>
+          <span id="throw-cooldown-label">READY</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="joystick-zone" class="game-ui hidden">
+    <div id="joystick-base"></div>
+    <div id="joystick-stick"></div>
+  </div>
+  <div id="pause-button" class="game-ui hidden"><img src="icons/pause.png" alt="pause"></div>
+  <div id="game-timer" class="game-ui hidden"><img src="icons/timer.png" id="timer-icon" alt=""><span id="timer-text">0s</span></div>
+  
+  <!-- Pause Menu -->
+  <div id="pause-menu">
+    <div id="pause-menu-content">
+      <div id="pause-title">PAUSED</div>
+      <button class="pause-btn resume" id="resume-btn"><img class="btn-icon" src="icons/playW.png" alt="">Resume</button>
+      <button class="pause-btn retry" id="retry-btn"><img class="btn-icon" src="icons/retry.png" alt="">Retry</button>
+      <button class="pause-btn settings" id="settings-btn"><img class="btn-icon" src="icons/settingsW.png" alt="">Settings</button>
+      <button class="pause-btn leave" id="leave-btn"><img class="btn-icon" src="icons/leave.png" alt="">Leave</button>
+    </div>
+  </div>
+
+  <!-- Settings Menu -->
+  <div id="settings-menu">
+    <div id="settings-menu-content">
+      <div id="settings-title">SETTINGS</div>
+      <div class="settings-option">
+        <label class="settings-label">Look Sensitivity</label>
+        <div class="settings-control">
+          <input type="range" class="settings-slider" id="sensitivity-slider" min="0.1" max="3" step="0.1" value="1">
+          <span class="settings-value" id="sensitivity-value">1.0</span>
+        </div>
+      </div>
+      <div class="settings-option">
+        <label class="settings-label">Graphics Quality</label>
+        <div class="gfx-btn-group">
+          <button class="gfx-btn" id="gfx-low">LOW</button>
+          <button class="gfx-btn" id="gfx-normal">NORMAL</button>
+          <button class="gfx-btn" id="gfx-high">HIGH</button>
+        </div>
+        <span class="settings-label" id="gfx-note" style="font-size:11px;opacity:0.6;margin-top:4px;">Takes effect on next level load</span>
+      </div>
+      <button class="settings-btn back" id="settings-back-btn"><img class="btn-icon" src="icons/back.png" alt="">Back</button>
+    </div>
+  </div>
+  
+  <!-- Completion Screen -->
+  <div id="completion-screen">
+    <div id="completion-content">
+      <div id="completion-title">LEVEL COMPLETED!</div>
+      <div id="completion-level-text">Level <span id="completion-level-number">1</span></div>
+      <div id="completion-stars-container">
+        <div class="completion-star"></div>
+        <div class="completion-star"></div>
+        <div class="completion-star"></div>
+      </div>
+      <div id="completion-time-label">Time</div>
+      <div id="completion-time">0.0s</div>
+      <div class="completion-buttons">
+        <button class="completion-btn retry" id="completion-retry-btn"><img class="btn-icon" src="icons/retry.png" alt="">Retry</button>
+        <button class="completion-btn leave" id="completion-leave-btn"><img class="btn-icon" src="icons/leave.png" alt="">Leave</button>
+        <button class="completion-btn next" id="completion-next-btn"><img class="btn-icon" src="icons/next.png" alt="">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level Details Card -->
+  <div id="level-details-card">
+    <div id="level-card-content">
+      <div id="level-card-close">×</div>
+      <div id="level-card-left">
+        <div id="level-card-image-container">
+          <img id="level-card-image" src="" alt="Level Preview">
+        </div>
+        <div id="level-card-info">
+          <div id="level-card-number">LEVEL 1</div>
+          <div id="level-card-name">THE BEGINNING</div>
+          <div id="level-card-status-container">
+            <span id="level-card-status-label">STATUS:</span>
+            <span id="level-card-status">INCOMPLETE</span>
+          </div>
+        </div>
+        <button id="level-card-play-btn"><img class="btn-icon" src="icons/playB.png" alt="">PLAY</button>
+      </div>
+      <div id="level-card-right">
+        <div id="level-card-stats-title">LEVEL STATS</div>
+        <div id="level-card-stars-container">
+          <div class="star-icon"></div>
+          <div class="star-icon"></div>
+          <div class="star-icon"></div>
+        </div>
+        <div id="level-card-missions">
+          <div class="mission-item" data-mission="time2">
+            <span class="mission-status">❌</span>
+            <span class="mission-text">Complete under 2min [+1 star]</span>
+          </div>
+          <div class="mission-item" data-mission="time1">
+            <span class="mission-status">❌</span>
+            <span class="mission-text">Complete under 1min [+1 star]</span>
+          </div>
+          <div class="mission-item" data-mission="deaths">
+            <span class="mission-status">❌</span>
+            <span class="mission-text">Die less than 5 times [+1 star]</span>
+          </div>
+        </div>
+        <div id="level-card-best-time-container">
+          <div id="level-card-best-time-label">BEST TIME:</div>
+          <div id="level-card-best-time">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+      }
+    }
+  </script>
+  
+  <script type="module">
+    import * as THREE from 'three';
+    import Stats from 'three/addons/libs/stats.module.js';
+    import { Game } from './game.js';
+    import { loadLevel as loadLevel1, loadPlayerModel as loadPlayerModel1, level1Config } from './level1.js';
+    import { loadLevel as loadLevel2, loadPlayerModel as loadPlayerModel2, level2Config } from './level2.js';
+    import { MenuBackground } from './menuBackground.js';
+    
+    // Initialize menu background
+    let menuBackgroundInstance = null;
+
+    function autoDetectQuality() {
+      const cores = navigator.hardwareConcurrency || 4;
+      const mem   = navigator.deviceMemory || 4;
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      // only really old/weak phones get low — everyone else gets normal
+      // high has to be picked manually in settings
+      if (isMobile && cores <= 2 && mem <= 2) return 'low';
+      return 'normal';
+    }
+
+    function getGraphicsQuality() {
+      return localStorage.getItem('graphicsQuality') || autoDetectQuality();
+    }
+
+    function setGraphicsQuality(q) {
+      localStorage.setItem('graphicsQuality', q);
+      window.graphicsQuality = q;
+      updateGfxButtons();
+      rebuildMenuBackground();
+    }
+
+    function updateGfxButtons() {
+      const q = getGraphicsQuality();
+      document.querySelectorAll('.gfx-btn').forEach(b => b.classList.remove('active'));
+      const map = { low: 'gfx-low', normal: 'gfx-normal', high: 'gfx-high' };
+      const el = document.getElementById(map[q]);
+      if (el) el.classList.add('active');
+    }
+
+    // CSS-only menu background for Low graphics — same vibe, zero WebGL
+    class MenuBackgroundLow {
+      constructor(container) {
+        this.container = container;
+        this.container.innerHTML =
+          '<div class="bg-dot"></div><div class="bg-dot"></div>' +
+          '<div class="bg-dot"></div><div class="bg-dot"></div>' +
+          '<div class="bg-dot"></div><div class="bg-dot"></div>';
+        this.container.classList.add('menu-bg-low');
+      }
+      start() {}
+      stop() {}
+      destroy() {
+        this.container.classList.remove('menu-bg-low');
+        this.container.innerHTML = '';
+      }
+    }
+
+    function rebuildMenuBackground() {
+      const menuBg = document.querySelector('.menu-background');
+      if (!menuBg || menuBg.classList.contains('hidden')) return;
+      if (menuBackgroundInstance) {
+        menuBackgroundInstance.destroy();
+        menuBackgroundInstance = null;
+      }
+      const q = getGraphicsQuality();
+      menuBackgroundInstance = q === 'low'
+        ? new MenuBackgroundLow(menuBg)
+        : new MenuBackground(menuBg);
+      menuBackgroundInstance.start();
+    }
+
+    function startMenuBackground() {
+      const menuBg = document.querySelector('.menu-background');
+      if (!menuBg) return;
+      menuBg.classList.remove('hidden');
+      if (!menuBackgroundInstance) {
+        const q = getGraphicsQuality();
+        menuBackgroundInstance = q === 'low'
+          ? new MenuBackgroundLow(menuBg)
+          : new MenuBackground(menuBg);
+      }
+      menuBackgroundInstance.start();
+    }
+
+    // Expose quality globally for level loaders
+    window.graphicsQuality = getGraphicsQuality();
+    
+    // Sound effects
+    const startBtnSound = new Audio('sound/startBtn.mp3');
+    const buttonClickSound = new Audio('sound/buttonClick.mp3');
+    const bgSound = new Audio('sound/bgSound.mp3');
+    
+    bgSound.loop = true;
+    bgSound.volume = 0.5;
+    
+    function playSound(audio) {
+      try {
+        audio.currentTime = 0;
+        audio.play().catch(err => console.log('Sound play failed:', err));
+      } catch (err) {
+        console.log('Sound error:', err);
+      }
+    }
+    
+    function playBgMusic() {
+      try {
+        bgSound.play().catch(err => console.log('BG music play failed:', err));
+      } catch (err) {
+        console.log('BG music error:', err);
+      }
+    }
+    
+    function stopBgMusic() {
+      try {
+        bgSound.pause();
+      } catch (err) {
+        console.log('BG music stop error:', err);
+      }
+    }
+    
+    // Level progress management
+    function getUnlockedLevels() {
+      const saved = localStorage.getItem('unlockedLevels');
+      return saved ? JSON.parse(saved) : [1];
+    }
+
+    function unlockLevel(levelNum) {
+      const unlocked = getUnlockedLevels();
+      if (!unlocked.includes(levelNum)) {
+        unlocked.push(levelNum);
+        localStorage.setItem('unlockedLevels', JSON.stringify(unlocked));
+      }
+      updateLevelUI();
+    }
+
+    window.unlockLevel = unlockLevel;
+
+    function getCompletedLevels() {
+      const saved = localStorage.getItem('completedLevels');
+      return saved ? JSON.parse(saved) : [];
+    }
+
+    function markLevelCompleted(levelNum) {
+      const completed = getCompletedLevels();
+      if (!completed.includes(levelNum)) {
+        completed.push(levelNum);
+        localStorage.setItem('completedLevels', JSON.stringify(completed));
+      }
+    }
+
+    window.markLevelCompleted = markLevelCompleted;
+
+    // Level stats management
+    function getLevelStats(levelNum) {
+      const saved = localStorage.getItem(`level${levelNum}Stats`);
+      return saved ? JSON.parse(saved) : null;
+    }
+
+    function saveLevelStats(levelNum, newStats) {
+      const currentStats = getLevelStats(levelNum);
+      
+      // Keep the best (lowest) time
+      const bestTime = currentStats && currentStats.bestTime 
+        ? Math.min(currentStats.bestTime, newStats.time)
+        : newStats.time;
+      
+      // Keep the highest star count
+      const bestStars = currentStats && currentStats.bestStars
+        ? Math.max(currentStats.bestStars, newStats.stars)
+        : newStats.stars;
+      
+      // Calculate current run missions
+      const currentMissions = {
+        time2: newStats.time < 120,
+        time1: newStats.time < 60,
+        deaths: newStats.deaths < 5
+      };
+      
+      // Merge with previous missions (keep any mission that was ever completed)
+      const missions = {
+        time2: (currentStats?.missions?.time2) || currentMissions.time2,
+        time1: (currentStats?.missions?.time1) || currentMissions.time1,
+        deaths: (currentStats?.missions?.deaths) || currentMissions.deaths
+      };
+      
+      // Recalculate best stars based on completed missions
+      const recalculatedStars = Object.values(missions).filter(m => m).length;
+      
+      const stats = {
+        bestTime: bestTime,
+        bestStars: Math.max(bestStars, recalculatedStars),
+        lastTime: newStats.time,
+        lastDeaths: newStats.deaths,
+        lastStars: newStats.stars,
+        missions: missions
+      };
+      
+      localStorage.setItem(`level${levelNum}Stats`, JSON.stringify(stats));
+    }
+
+    window.saveLevelStats = saveLevelStats;
+
+    const levelNames = {
+      1: "THE BEGINNING",
+      2: "RISING HEIGHTS"
+    };
+
+    function updateLevelUI() {
+      const unlocked = getUnlockedLevels();
+      
+      for (let i = 1; i <= 2; i++) {
+        const levelBox = document.getElementById(`level-${i}`);
+        if (levelBox) {
+          if (unlocked.includes(i)) {
+            levelBox.classList.remove('locked');
+            const lockIcon = levelBox.querySelector('.lock-icon');
+            if (lockIcon) lockIcon.remove();
+            
+            // Update stars for unlocked levels
+            const levelStarsContainer = document.querySelector(`.level-stars[data-level="${i}"]`);
+            if (levelStarsContainer) {
+              levelStarsContainer.classList.remove('hidden');
+              const stats = getLevelStats(i);
+              const earnedStars = stats && stats.bestStars ? stats.bestStars : 0;
+              
+              const starElements = levelStarsContainer.querySelectorAll('.level-star');
+              starElements.forEach((star, index) => {
+                if (index < earnedStars) {
+                  star.classList.add('earned');
+                } else {
+                  star.classList.remove('earned');
+                }
+              });
+            }
+          } else {
+            levelBox.classList.add('locked');
+            if (!levelBox.querySelector('.lock-icon')) {
+              const lockSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+              lockSvg.setAttribute('class', 'lock-icon');
+              lockSvg.setAttribute('viewBox', '0 0 24 24');
+              lockSvg.setAttribute('fill', '#888');
+              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+              path.setAttribute('d', 'M12 2C9.243 2 7 4.243 7 7v2H6c-1.103 0-2 .897-2 2v9c0 1.103.897 2 2 2h12c1.103 0 2-.897 2-2v-9c0-1.103-.897-2-2-2h-1V7c0-2.757-2.243-5-5-5zm6 9v9H6v-9h12zM9 9V7c0-1.654 1.346-3 3-3s3 1.346 3 3v2H9z');
+              lockSvg.appendChild(path);
+              levelBox.appendChild(lockSvg);
+            }
+            
+            // Hide stars for locked levels
+            const levelStarsContainer = document.querySelector(`.level-stars[data-level="${i}"]`);
+            if (levelStarsContainer) {
+              levelStarsContainer.classList.add('hidden');
+            }
+          }
+        }
+      }
+    }
+
+    // Menu navigation
+    const startScreen = document.getElementById('start-screen');
+    const mainMenu = document.getElementById('main-menu');
+    const levelSelection = document.getElementById('level-selection');
+    const container = document.getElementById('container');
+    const levelsBtn = document.getElementById('levels-btn');
+    const backBtn = document.getElementById('back-btn');
+    const level1Box = document.getElementById('level-1');
+    const level2Box = document.getElementById('level-2');
+    
+    // Store current level configuration
+    window.currentLevelConfig = null;
+    window.currentLoadLevel = null;
+    window.currentLoadPlayerModel = null;
+    window.gameEventListeners = {};
+
+    // Initialize level UI on load
+    updateLevelUI();
+
+    // Function to request fullscreen and lock orientation
+    async function enterFullscreenAndLockOrientation() {
+      try {
+        // Request fullscreen
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          await elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) {
+          await elem.msRequestFullscreen();
+        }
+        
+        // Lock to landscape orientation
+        if (screen.orientation && screen.orientation.lock) {
+          try {
+            await screen.orientation.lock('landscape');
+          } catch (err) {
+            console.log('Orientation lock not supported or failed:', err);
+          }
+        }
+      } catch (err) {
+        console.log('Fullscreen request failed:', err);
+      }
+    }
+
+    // Start screen click handler
+    startScreen.addEventListener('click', async () => {
+      // Play start button sound and background music
+      playSound(startBtnSound);
+      playBgMusic();
+      
+      // Request fullscreen and lock to landscape
+      await enterFullscreenAndLockOrientation();
+      
+      // Hide start screen and show main menu
+      startScreen.classList.remove('active');
+      startScreen.classList.add('hidden');
+      
+      startMenuBackground();
+      
+      mainMenu.classList.remove('hidden');
+      mainMenu.classList.add('active');
+    });
+
+    // Add click animation helper
+    function addClickAnimation(element, callback, delay = 250) {
+      element.addEventListener('click', (e) => {
+        if (!element.classList.contains('disabled') && !element.classList.contains('locked')) {
+          playSound(buttonClickSound);
+          element.classList.add('clicking');
+          setTimeout(() => {
+            element.classList.remove('clicking');
+            if (callback) callback(e);
+          }, delay);
+        }
+      });
+    }
+
+    // Show level selection when clicking "LEVELS"
+    addClickAnimation(levelsBtn, () => {
+      mainMenu.classList.remove('active');
+      mainMenu.classList.add('hidden');
+      levelSelection.classList.remove('hidden');
+      levelSelection.classList.add('active');
+      updateLevelUI();
+    });
+
+    // Go back to main menu
+    addClickAnimation(backBtn, () => {
+      levelSelection.classList.remove('active');
+      levelSelection.classList.add('hidden');
+      startMenuBackground();
+      mainMenu.classList.remove('hidden');
+      mainMenu.classList.add('active');
+    });
+
+    // Main menu SETTINGS button
+    const mainMenuSettingsBtn = document.getElementById('main-menu-settings-btn');
+    addClickAnimation(mainMenuSettingsBtn, () => {
+      updateGfxButtons();
+      document.getElementById('settings-menu').classList.add('active');
+    });
+
+    // Wire graphics quality buttons once at page load (work from both main menu & pause menu)
+    ['low', 'normal', 'high'].forEach(q => {
+      const btn = document.getElementById('gfx-' + q);
+      if (btn) btn.addEventListener('click', () => setGraphicsQuality(q));
+    });
+    // Highlight the current quality on load
+    updateGfxButtons();
+
+    // this back button works from the main menu — the in-game version adds its own handler on top
+    document.getElementById('settings-back-btn').addEventListener('click', () => {
+      if (!window.gameInstance) {
+        document.getElementById('settings-menu').classList.remove('active');
+      }
+    });
+
+    // Store event listeners for cleanup
+    window.gameEventListeners = {
+      resize: null,
+      resizeControls: null,
+      pauseClick: null,
+      resumeClick: null,
+      retryClick: null,
+      leaveClick: null,
+      completionRetry: null,
+      completionLeave: null,
+      completionNext: null
+    };
+
+    // Unload game function
+    function unloadGame() {
+      if (window.gameInstance) {
+        if (window.animationFrameId) {
+          cancelAnimationFrame(window.animationFrameId);
+          window.animationFrameId = null;
+        }
+        
+        window.gameInstance.clock.stop();
+        window.gameInstance.destroy();
+        
+        if (window.gameInstance.scene) {
+          // the sky/hdri texture isn't part of the scene graph so traverse() misses it — dispose manually
+          const sc = window.gameInstance.scene;
+          if (sc.background && sc.background.isTexture) sc.background.dispose();
+          if (sc.environment && sc.environment.isTexture && sc.environment !== sc.background) sc.environment.dispose();
+          sc.background = null;
+          sc.environment = null;
+
+          window.gameInstance.scene.traverse((object) => {
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+              if (Array.isArray(object.material)) {
+                object.material.forEach(material => {
+                  if (material.map) material.map.dispose();
+                  material.dispose();
+                });
+              } else {
+                if (object.material.map) object.material.map.dispose();
+                object.material.dispose();
+              }
+            }
+          });
+          window.gameInstance.scene.clear();
+        }
+        
+        // bloom materials aren't in the scene graph so we track them separately and dispose here
+        if (window.gameComposers) {
+          if (window.gameComposers.darkMat)      window.gameComposers.darkMat.dispose();
+          if (window.gameComposers.blendMat)     window.gameComposers.blendMat.dispose();
+          if (window.gameComposers.bloomComposer) window.gameComposers.bloomComposer.dispose();
+          if (window.gameComposers.finalComposer) window.gameComposers.finalComposer.dispose();
+          window.gameComposers = null;
+        }
+
+        if (window.gameInstance.renderer) {
+          // don't dispose the renderer — we reuse it every retry to avoid hitting
+          // the browser's webgl context limit (~8-16 per page)
+          window.gameInstance.renderer.setRenderTarget(null);
+          window.gameInstance.renderer.clear();
+        }
+        
+        // remove button listeners
+        if (window.gameEventListeners.resize) {
+          window.removeEventListener('resize', window.gameEventListeners.resize);
+        }
+        if (window.gameEventListeners.resizeControls) {
+          window.removeEventListener('resize', window.gameEventListeners.resizeControls);
+        }
+        
+        const pauseButton = document.getElementById('pause-button');
+        const resumeBtn = document.getElementById('resume-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const leaveBtn = document.getElementById('leave-btn');
+        const completionRetryBtn = document.getElementById('completion-retry-btn');
+        const completionLeaveBtn = document.getElementById('completion-leave-btn');
+        const completionNextBtn = document.getElementById('completion-next-btn');
+        
+        if (window.gameEventListeners.pauseClick) {
+          pauseButton.removeEventListener('click', window.gameEventListeners.pauseClick);
+        }
+        if (window.gameEventListeners.resumeClick) {
+          resumeBtn.removeEventListener('click', window.gameEventListeners.resumeClick);
+        }
+        if (window.gameEventListeners.retryClick) {
+          retryBtn.removeEventListener('click', window.gameEventListeners.retryClick);
+        }
+        if (window.gameEventListeners.leaveClick) {
+          leaveBtn.removeEventListener('click', window.gameEventListeners.leaveClick);
+        }
+        
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsBackBtn = document.getElementById('settings-back-btn');
+        const sensitivitySlider = document.getElementById('sensitivity-slider');
+        
+        if (window.gameEventListeners.settingsClick) {
+          settingsBtn.removeEventListener('click', window.gameEventListeners.settingsClick);
+        }
+        if (window.gameEventListeners.settingsBackClick) {
+          settingsBackBtn.removeEventListener('click', window.gameEventListeners.settingsBackClick);
+        }
+        if (window.gameEventListeners.sensitivityChange) {
+          sensitivitySlider.removeEventListener('input', window.gameEventListeners.sensitivityChange);
+        }
+        
+        if (window.gameEventListeners.completionRetry) {
+          completionRetryBtn.removeEventListener('click', window.gameEventListeners.completionRetry);
+        }
+        if (window.gameEventListeners.completionLeave) {
+          completionLeaveBtn.removeEventListener('click', window.gameEventListeners.completionLeave);
+        }
+        if (window.gameEventListeners.completionNext) {
+          completionNextBtn.removeEventListener('click', window.gameEventListeners.completionNext);
+        }
+        // Clear the container
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
+        
+        // Reset game instance
+        window.gameInstance = null;
+
+        // Null every entry so old closures (scene/camera/renderer/game refs) can be GC'd
+        window.gameEventListeners = {
+          resize: null, resizeControls: null,
+          pauseClick: null, resumeClick: null, retryClick: null, leaveClick: null,
+          settingsClick: null, settingsBackClick: null, sensitivityChange: null,
+          completionRetry: null, completionLeave: null, completionNext: null
+        };
+      }
+    }
+
+    async function startLevel(levelConfig, loadLevel, loadPlayerModel) {
+      // Guard against multiple simultaneous loads (rapid retry clicks)
+      if (window.isLoadingLevel) return;
+      window.isLoadingLevel = true;
+
+      // Store current level for retry
+      window.currentLevelConfig = levelConfig;
+      window.currentLoadLevel = loadLevel;
+      window.currentLoadPlayerModel = loadPlayerModel;
+      
+      stopBgMusic();
+      unloadGame();
+      
+      levelSelection.classList.remove('active');
+      levelSelection.classList.add('hidden');
+      
+      const loadingScreen = document.getElementById('loading-screen');
+      loadingScreen.classList.remove('hidden');
+      
+      try {
+        await initializeGame(levelConfig, loadLevel, loadPlayerModel);
+      } catch (e) {
+        window.isLoadingLevel = false;
+        throw e;
+      }
+      
+      // keep the lock on during the short settle wait — rapid retry taps during this
+      // window would otherwise call unloadGame on the renderer we just set up
+      await new Promise(resolve => setTimeout(resolve, 300));
+      window.isLoadingLevel = false;
+      
+      loadingScreen.classList.add('hidden');
+      container.classList.remove('hidden');
+      container.classList.add('active');
+      
+      // kill the menu background animation while in-game (saves resources)
+      const menuBackground = document.querySelector('.menu-background');
+      if (menuBackground) {
+        menuBackground.classList.add('hidden');
+        if (menuBackgroundInstance) {
+          menuBackgroundInstance.destroy();
+          menuBackgroundInstance = null;
+        }
+      }
+      
+      document.querySelectorAll('.game-ui').forEach(el => {
+        el.classList.remove('hidden');
+      });
+
+      // joystick rect needs to be recalculated once the UI is visible
+      if (window.gameInstance && window.gameInstance.updateJoystickRect) {
+        window.gameInstance.updateJoystickRect();
+      }
+    }
+    
+    // Level details card elements
+    const levelDetailsCard = document.getElementById('level-details-card');
+    const levelCardImage = document.getElementById('level-card-image');
+    const levelCardNumber = document.getElementById('level-card-number');
+    const levelCardName = document.getElementById('level-card-name');
+    const levelCardStatus = document.getElementById('level-card-status');
+    const levelCardPlayBtn = document.getElementById('level-card-play-btn');
+    const levelCardClose = document.getElementById('level-card-close');
+
+    let currentCardLevel = null;
+    let cardPlayClickHandler = null;
+    let cardCloseClickHandler = null;
+
+    function updateLevelCardStats(stats) {
+      const stars = document.querySelectorAll('.star-icon');
+      const missions = document.querySelectorAll('.mission-item');
+      const bestTimeEl = document.getElementById('level-card-best-time');
+      
+      // Reset all stars to grey
+      stars.forEach(star => star.classList.remove('lit'));
+      
+      if (stats) {
+        // Light up stars based on best stars
+        for (let i = 0; i < stats.bestStars && i < stars.length; i++) {
+          stars[i].classList.add('lit');
+        }
+        
+        // Update missions
+        missions.forEach(mission => {
+          const missionType = mission.getAttribute('data-mission');
+          const statusEl = mission.querySelector('.mission-status');
+          
+          let completed = false;
+          if (missionType === 'time2') {
+            completed = stats.missions.time2;
+          } else if (missionType === 'time1') {
+            completed = stats.missions.time1;
+          } else if (missionType === 'deaths') {
+            completed = stats.missions.deaths;
+          }
+          
+          statusEl.textContent = completed ? '✅' : '❌';
+        });
+        
+        // Update best time
+        bestTimeEl.textContent = formatTime(stats.bestTime);
+      } else {
+        // No stats - show all red crosses and no time
+        missions.forEach(mission => {
+          const statusEl = mission.querySelector('.mission-status');
+          statusEl.textContent = '❌';
+        });
+        bestTimeEl.textContent = '--';
+      }
+    }
+
+    function formatTime(seconds) {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      const secs = seconds % 60;
+
+      if (hours > 0) {
+        return `${hours}h ${minutes}m ${secs.toFixed(2)}s`;
+      } else if (minutes > 0) {
+        return `${minutes}m ${secs.toFixed(2)}s`;
+      } else {
+        return `${secs.toFixed(2)}s`;
+      }
+    }
+
+    function showLevelCard(levelNum, levelConfig, loadLevel, loadPlayerModel) {
+      const completed = getCompletedLevels();
+      const isCompleted = completed.includes(levelNum);
+      const stats = getLevelStats(levelNum);
+
+      currentCardLevel = { levelNum, levelConfig, loadLevel, loadPlayerModel };
+
+      levelCardImage.src = `cardImg/level${levelNum}.jpg`;
+      levelCardNumber.textContent = `LEVEL ${levelNum}`;
+      levelCardName.textContent = levelNames[levelNum] || `LEVEL ${levelNum}`;
+      
+      levelCardStatus.textContent = isCompleted ? 'COMPLETED' : 'INCOMPLETE';
+      levelCardStatus.className = isCompleted ? 'completed' : 'incomplete';
+
+      // Update stars and missions
+      updateLevelCardStats(stats);
+
+      // Remove old event listeners before adding new ones
+      if (cardPlayClickHandler) {
+        levelCardPlayBtn.removeEventListener('click', cardPlayClickHandler);
+      }
+      if (cardCloseClickHandler) {
+        levelCardClose.removeEventListener('click', cardCloseClickHandler);
+      }
+
+      // Create and attach event listeners
+      cardPlayClickHandler = async () => {
+        playSound(buttonClickSound);
+        levelCardPlayBtn.classList.add('clicking');
+        setTimeout(async () => {
+          levelCardPlayBtn.classList.remove('clicking');
+          
+          if (currentCardLevel) {
+            const { levelConfig, loadLevel, loadPlayerModel } = currentCardLevel;
+            hideLevelCard();
+            try {
+              await startLevel(levelConfig, loadLevel, loadPlayerModel);
+            } catch (err) {
+              console.error('Failed to start level:', err);
+              // Reset loading screen and show level selection again
+              const loadingScreen = document.getElementById('loading-screen');
+              loadingScreen.classList.add('hidden');
+              levelSelection.classList.remove('hidden');
+              levelSelection.classList.add('active');
+            }
+          }
+        }, 250);
+      };
+
+      cardCloseClickHandler = () => {
+        playSound(buttonClickSound);
+        hideLevelCard();
+      };
+
+      levelCardPlayBtn.addEventListener('click', cardPlayClickHandler);
+      levelCardClose.addEventListener('click', cardCloseClickHandler);
+
+      levelDetailsCard.classList.add('active');
+    }
+
+    function hideLevelCard() {
+      levelDetailsCard.classList.remove('active');
+      
+      if (cardPlayClickHandler) {
+        levelCardPlayBtn.removeEventListener('click', cardPlayClickHandler);
+        cardPlayClickHandler = null;
+      }
+      
+      if (cardCloseClickHandler) {
+        levelCardClose.removeEventListener('click', cardCloseClickHandler);
+        cardCloseClickHandler = null;
+      }
+      
+      currentCardLevel = null;
+    }
+
+    // Show card for Level 1
+    addClickAnimation(level1Box, () => {
+      showLevelCard(1, level1Config, loadLevel1, loadPlayerModel1);
+    });
+    
+    // Show card for Level 2
+    addClickAnimation(level2Box, () => {
+      showLevelCard(2, level2Config, loadLevel2, loadPlayerModel2);
+    });
+
+    async function initializeGame(levelConfig, loadLevel, loadPlayerModel) {
+      const loadingPercentage = document.getElementById('loading-percentage');
+      const loadingBar = document.getElementById('loading-bar');
+
+      // Start fake progress animation immediately — covers all init steps
+      const initStart = Date.now();
+      let fakeProgress = 0;
+      const fakeTimer = setInterval(() => {
+        const elapsed = (Date.now() - initStart) / 1000;
+        fakeProgress = Math.min(0.93, 1 - Math.exp(-elapsed / 10));
+        loadingPercentage.textContent = Math.floor(fakeProgress * 100) + '%';
+        loadingBar.style.width = (fakeProgress * 100) + '%';
+      }, 100);
+
+      const gfxQuality = getGraphicsQuality();
+      window.graphicsQuality = gfxQuality;
+      
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.Fog(0x87ceeb, 60, 400);
+      
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.rotation.order = 'YXZ';
+
+      // lighting — brighter on low quality to compensate for no shadows/bloom
+      const hemiIntensity  = gfxQuality === 'low' ? 3.5 : gfxQuality === 'normal' ? 2.0 : 1.0;
+      const dirIntensity   = gfxQuality === 'low' ? 2.5 : gfxQuality === 'normal' ? 2.0 : 1.5;
+      const fillIntensity  = gfxQuality === 'low' ? 2.0 : gfxQuality === 'normal' ? 1.0 : 0.6;
+      const sunIntensity   = gfxQuality === 'low' ? 8.0 : gfxQuality === 'normal' ? 5.0 : 3.0;
+      const shadowMapSize  = gfxQuality === 'high' ? 2048 : 512;
+
+      const hemiLight = new THREE.HemisphereLight(0xbcdfff, 0x7a6c5a, hemiIntensity);
+      scene.add(hemiLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, dirIntensity);
+      directionalLight.position.set(-30, 50, -10);
+      directionalLight.castShadow = gfxQuality !== 'low';
+      directionalLight.shadow.camera.near = 0.01;
+      directionalLight.shadow.camera.far = 200;
+      directionalLight.shadow.camera.right = 50;
+      directionalLight.shadow.camera.left = -50;
+      directionalLight.shadow.camera.top = 50;
+      directionalLight.shadow.camera.bottom = -50;
+      directionalLight.shadow.mapSize.width = shadowMapSize;
+      directionalLight.shadow.mapSize.height = shadowMapSize;
+      directionalLight.shadow.radius = 2;
+      directionalLight.shadow.bias = -0.0001;
+      scene.add(directionalLight);
+      
+      const fillLight = new THREE.HemisphereLight(0xcadfff, 0x9e8b6d, fillIntensity);
+      fillLight.position.set(2, 1, 1);
+      scene.add(fillLight);
+      
+      const sunLight = new THREE.PointLight(0xfff2cc, sunIntensity, 200);
+      sunLight.position.set(0, 10, 0);
+      sunLight.castShadow = false;
+      scene.add(sunLight);
+      
+      const sunGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+      const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffffcc });
+      const sunSphere = new THREE.Mesh(sunGeometry, sunMaterial);
+      sunSphere.position.copy(sunLight.position);
+      scene.add(sunSphere);
+      
+      // reuse the same renderer every time — creating a new one each retry would hit
+      // the browser's webgl context limit and crash after ~8 retries
+      let renderer;
+      if (window.sharedRenderer) {
+        renderer = window.sharedRenderer;
+      } else {
+        renderer = new THREE.WebGLRenderer({ antialias: gfxQuality !== 'low' });
+        window.sharedRenderer = renderer;
+      }
+      renderer.setPixelRatio(gfxQuality === 'high' ? window.devicePixelRatio : gfxQuality === 'normal' ? Math.min(window.devicePixelRatio, 1.5) : 1);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = gfxQuality !== 'low';
+      renderer.shadowMap.type = THREE.VSMShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      // unloadGame clears the container, so we need to put the canvas back each time
+      container.appendChild(renderer.domElement);
+
+      // bloom setup — only objects on layer 1 will glow (kill bricks, portals etc)
+      const BLOOM_LAYER = 1;
+      const bloomLayerMask = new THREE.Layers();
+      bloomLayerMask.set(BLOOM_LAYER);
+      const darkMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      const savedMats = {};
+
+      let bloomComposer = null, finalComposer = null, blendMat = null;
+      if (gfxQuality !== 'low') {
+        try {
+          const { EffectComposer }  = await import('three/addons/postprocessing/EffectComposer.js');
+          const { RenderPass }      = await import('three/addons/postprocessing/RenderPass.js');
+          const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
+          const { ShaderPass }      = await import('three/addons/postprocessing/ShaderPass.js');
+
+          bloomComposer = new EffectComposer(renderer);
+          bloomComposer.renderToScreen = false;
+          bloomComposer.addPass(new RenderPass(scene, camera));
+          bloomComposer.addPass(new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.22,
+            0.35,
+            0.0
+          ));
+
+          blendMat = new THREE.ShaderMaterial({
+            uniforms: {
+              baseTexture:  { value: null },
+              bloomTexture: { value: bloomComposer.renderTarget2.texture }
+            },
+            vertexShader:   'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+            fragmentShader: 'uniform sampler2D baseTexture; uniform sampler2D bloomTexture; varying vec2 vUv; void main(){ gl_FragColor = texture2D(baseTexture,vUv) + texture2D(bloomTexture,vUv); }'
+          });
+          const finalBlendPass = new ShaderPass(blendMat, 'baseTexture');
+          finalBlendPass.needsSwap = true;
+
+          finalComposer = new EffectComposer(renderer);
+          finalComposer.addPass(new RenderPass(scene, camera));
+          finalComposer.addPass(finalBlendPass);
+        } catch(bloomErr) {
+          console.warn('Selective bloom unavailable, using standard render:', bloomErr);
+        }
+      }
+
+      // store bloom stuff globally so unloadGame can dispose it — these never appear in the scene graph
+      window.gameComposers = { bloomComposer, finalComposer, darkMat, blendMat };
+      
+      const stats = new Stats();
+      stats.domElement.style.position = 'absolute';
+      stats.domElement.style.top = '0px';
+      container.appendChild(stats.domElement);
+      
+      const game = new Game(scene, camera, renderer, levelConfig);
+      window.gameInstance = game;
+      
+      const updateProgress = (progress) => {
+        loadingPercentage.textContent = Math.floor(progress * 100) + '%';
+        loadingBar.style.width = (progress * 100) + '%';
+      };
+      
+      let levelObjects;
+      try {
+        levelObjects = await loadLevel(scene, game.worldOctree, null);
+      } catch (loadErr) {
+        clearInterval(fakeTimer);
+        throw loadErr;
+      }
+
+      // Loading done — clear fake timer and snap to 100%
+      clearInterval(fakeTimer);
+      loadingPercentage.textContent = '100%';
+      loadingBar.style.width = '100%';
+
+      // Level 2: wire game arrays + debug panel
+      if (levelConfig.levelNumber === 2 && levelObjects) {
+        const { completionPlatform, checkpoints, killBricks } = levelObjects;
+        const THREE_Vec3 = (await import('three')).Vector3;
+
+        game.platformPos = completionPlatform.position;
+
+        game.checkpoints = checkpoints.map(cp => ({
+          pos: cp.mesh.position,
+          size: new THREE_Vec3(3.55, 0.3, 3.55),
+          activated: false,
+          wasIn: false
+        }));
+
+        game.killBricks = killBricks.map(kb => ({
+          pos: kb.mesh.position,
+          size: new THREE_Vec3(3.55, 0.71, 0.71)
+        }));
+
+        // make checkpoint labels float up and down
+        checkpoints.forEach((cp) => {
+          game.levelAnimations.push((t) => {
+            if (cp.label.visible) cp.label.position.y = 2.2 + Math.sin(t * 1.8) * 0.18;
+          });
+        });
+
+        // hide the label once you've touched the checkpoint
+        game.onCheckpointActivated = (idx) => {
+          if (checkpoints[idx]) checkpoints[idx].label.visible = false;
+        };
+
+        // show labels again when the player presses Enter to reset
+        game.onCheckpointsReset = () => {
+          checkpoints.forEach(cp => { cp.label.visible = true; });
+        };
+
+        // make kill bricks glow
+        killBricks.forEach(kb => kb.mesh.layers.enable(BLOOM_LAYER));
+      }
+
+
+      // Store resize handler for camera
+      window.gameEventListeners.resize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        if (bloomComposer) bloomComposer.setSize(window.innerWidth, window.innerHeight);
+        if (finalComposer) finalComposer.setSize(window.innerWidth, window.innerHeight);
+      };
+      window.addEventListener('resize', window.gameEventListeners.resize);
+      
+      function updateControlsVisibility() {
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+        const jumpButton = document.getElementById("jump-button");
+        const joystickZone = document.getElementById('joystick-zone');
+        const throwButton = document.getElementById("throw-button");
+        const throwCooldownContainer = document.getElementById("throw-cooldown-container");
+        
+        const useBalls = game.useBalls;
+        
+        jumpButton.style.display = isMobile ? "block" : "none";
+        joystickZone.style.display = isMobile ? "block" : "none";
+        throwButton.style.display = (isMobile && useBalls) ? "block" : "none";
+        throwCooldownContainer.style.display = useBalls ? "flex" : "none";
+      }
+      
+      // Store resize handler for controls
+      window.gameEventListeners.resizeControls = updateControlsVisibility;
+      window.addEventListener("resize", window.gameEventListeners.resizeControls);
+      updateControlsVisibility();
+      
+      // Pause menu functionality
+      const pauseButton = document.getElementById('pause-button');
+      const pauseMenu = document.getElementById('pause-menu');
+      const resumeBtn = document.getElementById('resume-btn');
+      const retryBtn = document.getElementById('retry-btn');
+      const leaveBtn = document.getElementById('leave-btn');
+      
+      // Store pause button handler
+      window.gameEventListeners.pauseClick = () => {
+        playSound(buttonClickSound);
+        game.pause();
+        pauseMenu.classList.add('active');
+      };
+      pauseButton.addEventListener('click', window.gameEventListeners.pauseClick);
+      
+      // Store resume button handler (with animation)
+      window.gameEventListeners.resumeClick = () => {
+        playSound(buttonClickSound);
+        resumeBtn.classList.add('clicking');
+        setTimeout(() => {
+          resumeBtn.classList.remove('clicking');
+          game.resume();
+          pauseMenu.classList.remove('active');
+        }, 200);
+      };
+      resumeBtn.addEventListener('click', window.gameEventListeners.resumeClick);
+      
+      // Store retry button handler (with animation)
+      window.gameEventListeners.retryClick = async () => {
+        playSound(buttonClickSound);
+        retryBtn.classList.add('clicking');
+        setTimeout(async () => {
+          retryBtn.classList.remove('clicking');
+          pauseMenu.classList.remove('active');
+          await startLevel(window.currentLevelConfig, window.currentLoadLevel, window.currentLoadPlayerModel);
+        }, 200);
+      };
+      retryBtn.addEventListener('click', window.gameEventListeners.retryClick);
+      
+      // Store leave button handler (with animation)
+      window.gameEventListeners.leaveClick = () => {
+        playSound(buttonClickSound);
+        leaveBtn.classList.add('clicking');
+        setTimeout(() => {
+          leaveBtn.classList.remove('clicking');
+          pauseMenu.classList.remove('active');
+          container.classList.remove('active');
+          container.classList.add('hidden');
+          document.querySelectorAll('.game-ui').forEach(el => {
+            el.classList.add('hidden');
+          });
+          
+          unloadGame();
+          
+          // Resume background music when returning to menu
+          playBgMusic();
+          
+          // Show and restart menu background
+          const menuBackground = document.querySelector('.menu-background');
+          if (menuBackground) {
+            menuBackground.classList.remove('hidden');
+            if (!menuBackgroundInstance) {
+              menuBackgroundInstance = new MenuBackground(menuBackground);
+            }
+            menuBackgroundInstance.start();
+          }
+          
+          mainMenu.classList.remove('hidden');
+          mainMenu.classList.add('active');
+        }, 200);
+      };
+      leaveBtn.addEventListener('click', window.gameEventListeners.leaveClick);
+
+      // Settings menu functionality
+      const settingsMenu = document.getElementById('settings-menu');
+      const settingsBtn = document.getElementById('settings-btn');
+      const settingsBackBtn = document.getElementById('settings-back-btn');
+      const sensitivitySlider = document.getElementById('sensitivity-slider');
+      const sensitivityValue = document.getElementById('sensitivity-value');
+      
+      // Load saved sensitivity
+      const savedSensitivity = localStorage.getItem('mouseSensitivity') || '1.0';
+      sensitivitySlider.value = savedSensitivity;
+      sensitivityValue.textContent = parseFloat(savedSensitivity).toFixed(1);
+      
+      // Settings button handler — snapshot current quality so we can detect changes
+      let qualityOnSettingsOpen = getGraphicsQuality();
+      window.gameEventListeners.settingsClick = () => {
+        qualityOnSettingsOpen = getGraphicsQuality();
+        updateGfxButtons();
+        playSound(buttonClickSound);
+        settingsBtn.classList.add('clicking');
+        setTimeout(() => {
+          settingsBtn.classList.remove('clicking');
+          pauseMenu.classList.remove('active');
+          settingsMenu.classList.add('active');
+        }, 200);
+      };
+      settingsBtn.addEventListener('click', window.gameEventListeners.settingsClick);
+      
+      // Settings back button handler — if quality changed, reload the level with new graphics
+      window.gameEventListeners.settingsBackClick = () => {
+        playSound(buttonClickSound);
+        settingsBackBtn.classList.add('clicking');
+        const qualityChanged = getGraphicsQuality() !== qualityOnSettingsOpen;
+        setTimeout(async () => {
+          settingsBackBtn.classList.remove('clicking');
+          settingsMenu.classList.remove('active');
+          if (qualityChanged && window.currentLevelConfig) {
+            // Hide pause menu, show loading screen, restart level with new quality
+            pauseMenu.classList.remove('active');
+            document.exitPointerLock?.();
+            await startLevel(window.currentLevelConfig, window.currentLoadLevel, window.currentLoadPlayerModel);
+          } else {
+            pauseMenu.classList.add('active');
+          }
+        }, 200);
+      };
+      settingsBackBtn.addEventListener('click', window.gameEventListeners.settingsBackClick);
+      
+      // Sensitivity slider handler
+      window.gameEventListeners.sensitivityChange = () => {
+        const value = parseFloat(sensitivitySlider.value);
+        sensitivityValue.textContent = value.toFixed(1);
+        localStorage.setItem('mouseSensitivity', value);
+        if (game) {
+          game.sensitivity = value;
+        }
+      };
+      sensitivitySlider.addEventListener('input', window.gameEventListeners.sensitivityChange);
+
+      // (Graphics quality buttons are wired at page load — see top-level setup below)
+      
+      // Completion screen functionality
+      const completionScreen = document.getElementById('completion-screen');
+      const completionRetryBtn = document.getElementById('completion-retry-btn');
+      const completionLeaveBtn = document.getElementById('completion-leave-btn');
+      const completionNextBtn = document.getElementById('completion-next-btn');
+      
+      // Store completion retry button handler (with animation)
+      window.gameEventListeners.completionRetry = async () => {
+        playSound(buttonClickSound);
+        completionRetryBtn.classList.add('clicking');
+        setTimeout(async () => {
+          completionRetryBtn.classList.remove('clicking');
+          completionScreen.classList.remove('active');
+          await startLevel(window.currentLevelConfig, window.currentLoadLevel, window.currentLoadPlayerModel);
+        }, 200);
+      };
+      completionRetryBtn.addEventListener('click', window.gameEventListeners.completionRetry);
+      
+      // Store completion leave button handler (with animation)
+      window.gameEventListeners.completionLeave = () => {
+        playSound(buttonClickSound);
+        completionLeaveBtn.classList.add('clicking');
+        setTimeout(() => {
+          completionLeaveBtn.classList.remove('clicking');
+          completionScreen.classList.remove('active');
+          container.classList.remove('active');
+          container.classList.add('hidden');
+          document.querySelectorAll('.game-ui').forEach(el => {
+            el.classList.add('hidden');
+          });
+          
+          unloadGame();
+          
+          // Resume background music when returning to menu
+          playBgMusic();
+          
+          // Show and restart menu background
+          const menuBackground = document.querySelector('.menu-background');
+          if (menuBackground) {
+            menuBackground.classList.remove('hidden');
+            if (!menuBackgroundInstance) {
+              menuBackgroundInstance = new MenuBackground(menuBackground);
+            }
+            menuBackgroundInstance.start();
+          }
+          
+          mainMenu.classList.remove('hidden');
+          mainMenu.classList.add('active');
+        }, 200);
+      };
+      completionLeaveBtn.addEventListener('click', window.gameEventListeners.completionLeave);
+      
+      // Store completion next button handler (with animation)
+      window.gameEventListeners.completionNext = async () => {
+        playSound(buttonClickSound);
+        completionNextBtn.classList.add('clicking');
+        setTimeout(async () => {
+          completionNextBtn.classList.remove('clicking');
+          completionScreen.classList.remove('active');
+          
+          const currentLevel = window.currentLevelConfig.levelNumber;
+          const nextLevel = currentLevel + 1;
+          
+          unlockLevel(nextLevel);
+          
+          const levelConfigs = {
+            1: { config: level1Config, loadLevel: loadLevel1, loadPlayerModel: loadPlayerModel1 },
+            2: { config: level2Config, loadLevel: loadLevel2, loadPlayerModel: loadPlayerModel2 }
+          };
+          
+          if (levelConfigs[nextLevel]) {
+            const next = levelConfigs[nextLevel];
+            await startLevel(next.config, next.loadLevel, next.loadPlayerModel);
+          } else {
+            container.classList.remove('active');
+            container.classList.add('hidden');
+            document.querySelectorAll('.game-ui').forEach(el => {
+              el.classList.add('hidden');
+            });
+            
+            unloadGame();
+            
+            // Resume background music when returning to level selection
+            playBgMusic();
+            
+            levelSelection.classList.remove('hidden');
+            levelSelection.classList.add('active');
+          }
+        }, 200);
+      };
+      completionNextBtn.addEventListener('click', window.gameEventListeners.completionNext);
+      
+      // Cache the black colour used every frame in the bloom pass —
+      // allocating new THREE.Color(0x000000) on every frame creates constant GC pressure.
+      const _bloomBlackBg = new THREE.Color(0x000000);
+
+      function animate() {
+        window.animationFrameId = requestAnimationFrame(animate);
+        game.animate();
+
+        if (bloomComposer && finalComposer) {
+          // Pass 1: bloom-only — black out everything NOT on bloom layer, black sky
+          const savedBg = scene.background;
+          scene.background = _bloomBlackBg;
+          scene.traverse((obj) => {
+            if (obj.isMesh && !bloomLayerMask.test(obj.layers)) {
+              savedMats[obj.uuid] = obj.material;
+              obj.material = darkMat;
+            } else if ((obj.isSprite || obj.isPoints) && !bloomLayerMask.test(obj.layers)) {
+              // Hide sprites (checkpoint labels) and particles during bloom pass
+              savedMats[obj.uuid] = obj.visible;
+              obj.visible = false;
+            }
+          });
+          bloomComposer.render();
+          // Restore all
+          scene.traverse((obj) => {
+            if (savedMats[obj.uuid] !== undefined) {
+              if (obj.isMesh) { obj.material = savedMats[obj.uuid]; }
+              else { obj.visible = savedMats[obj.uuid]; }
+              delete savedMats[obj.uuid];
+            }
+          });
+          scene.background = savedBg;
+          // Pass 2: full scene render + blend bloom on top
+          finalComposer.render();
+        } else {
+          renderer.render(scene, camera);
+        }
+
+        stats.update();
+      }
+      
+      game.resetTimer();
+      
+      const timerElement = document.getElementById('game-timer');
+      if (timerElement) {
+        const timerSpan = timerElement.querySelector('#timer-text');
+        if (timerSpan) { timerSpan.textContent = '0s'; } else { timerElement.textContent = '0s'; }
+      }
+      
+      animate();
+    }
+  </script>
+</body>
+</html>
